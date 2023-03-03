@@ -57,9 +57,9 @@ function eraseCookie(name) {
 }
 
   function fetchChatHistory() {
-    return sdk.chatbotGet({}, {
+    return sdk.chatbotGet({
       'current_session_id': getCookie('current_session_id')
-    }, {});
+    }, {}, {});
   }
 
   function updateScrollbar() {
