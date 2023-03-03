@@ -14,7 +14,7 @@ SQS_URL = 'https://sqs.us-east-1.amazonaws.com/023011713484/restaurant-requests'
 def create_client():
     host = 'https://search-yelp-restaurants-d3u6dmgrb43vnv5ggpqfqnuwra.us-east-1.es.amazonaws.com'
     port = 443
-    auth = ('admin', 'Admin1230!')
+    auth = ('admin', 'password')
 
     client = OpenSearch(
         hosts = [host],
