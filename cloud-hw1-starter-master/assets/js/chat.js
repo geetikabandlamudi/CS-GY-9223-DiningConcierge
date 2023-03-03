@@ -49,7 +49,11 @@ $(document).ready(function() {
 
 function getCookie(name) {
     // return '85adf22a-20b2-487e-a76a-985d17e38acc';
-    return localStorage.current_session_id;
+    console.log(localStorage.current_session_id)
+    if (localStorage.current_session_id != '')
+      return localStorage.current_session_id;
+    else
+      return 'None'
 }
 function eraseCookie(name) {   
     document.cookie = name +'=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
