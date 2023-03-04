@@ -4,13 +4,14 @@ import decimal
 import time
 from config import *
 import boto3
-from datetime import datetime
+import datetime
 import re
 import uuid
+from zoneinfo import ZoneInfo
     
 def push_to_sqs(context):
     print("Attempting to push to SQS ::", context)
-    current_time = datetime.now().strftime("%H:%M:%S %p")
+    current_time = datetime.datetime.now().strftime("%H:%M:%S %p")
     context['current_time'] = current_time
     payload = json.dumps(context)
     sqs = boto3.client('sqs')
@@ -47,31 +48,41 @@ def isTimeFormat(time_str):
     print("Time got from frontend", time_str)
     universal_time = None
     try:
-        time_str = time_str.lower().replace(" ", "")
         org_time = time_str
+        time_str = time_str.lower()
         if time_str.endswith("am") or time_str.endswith("pm"):
-            time_str = time_str[:-2]
-            if ":" in time_str:
-                universal_time = datetime.strptime(time_str, "%I:%M").strftime("%H:%M")
-            elif time_str.endswith("oclock"):
-                universal_time = datetime.strptime(time_str[:-6], "%I").strftime("%H:%M")
+            time_str = time_str[:-2].strip()
+            if ":" in time_str: 
+                universal_time = datetime.datetime.strptime(time_str, "%I:%M").strftime("%H %M")
+            elif time_str.endswith("o clock"):
+                universal_time = datetime.datetime.strptime(time_str[:-6], "%I").strftime("%H:%M")
+            elif len(time_str) == 4:
+                time_str = time_str[:-2] + " " + time_str[2:]
+                universal_time = datetime.datetime.strptime(time_str, "%H %M").strftime("%H %M")
             else:
-                universal_time = datetime.strptime(time_str, "%I").strftime("%H:%M")
+                universal_time = datetime.datetime.strptime(time_str, "%I").strftime("%H:%M")
             if org_time.endswith("pm"): # Add 12 hours to times in the afternoon/evening
-                hour = int(universal_time.split(":")[0])
+                if ":" in universal_time:
+                    hour = int(universal_time.split(":")[0])
+                else:
+                    hour = int(universal_time.split(" ")[0])
                 if hour < 12:
                     hour += 12
-                universal_time = f"{hour:02}:{universal_time.split(':')[1]}"
+                if ":" in universal_time:
+                    universal_time = f"{hour:02}:{universal_time.split(':')[1]}"
+                else:
+                    universal_time = f"{hour:02}:{universal_time.split(' ')[1]}"
                 
-        elif time_str.endswith("oclock"):
-            universal_time = datetime.strptime(time_str[:-6], "%I").strftime("%H:%M")
+        elif time_str.endswith("o clock"):
+            time_str = time_str.replace(" ", "")
+            universal_time = datetime.datetime.strptime(time_str[:-6], "%I").strftime("%H %M")
         else:
-            universal_time = datetime.strptime(time_str, "%H:%M").strftime("%H:%M")
+            universal_time = datetime.datetime.strptime(time_str, "%H %M").strftime("%H:%M")
             
         print("Universal time :: ", universal_time)
-        return True
+        return True, universal_time
     except ValueError:
-        return False
+        return False, None
 
 def validate_email(email):
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
@@ -101,6 +112,16 @@ def close(intent_request, session_attributes, fulfillment_state, message, dialog
         'sessionId': intent_request['sessionId'],
         'requestAttributes': intent_request['requestAttributes'] if 'requestAttributes' in intent_request else None
     }
+    
+def isFutureTime(time_str):
+    time_obj = datetime.datetime.strptime(time_str, '%H:%M')
+    nyc_tz = datetime.timezone(datetime.timedelta(hours=-5))
+    current_time = datetime.datetime.now(nyc_tz).time()
+    print("Current time", current_time, time_obj.time())
+    if time_obj.time() >= current_time:
+        return True
+    else:
+        return False
 
 
 def validate_request(intent_request):
@@ -131,9 +152,13 @@ def validate_request(intent_request):
             print("Invalid location", location)
             message += "Oops, we support only Manhattan at the moment "
     if time:
-        if not isTimeFormat(time):
+        isvalidFlag, validtime = isTimeFormat(time)
+        if not isvalidFlag: 
             print("Invalid time. Express as 13:00 or 11:00pm", time)
             message += "Not a valid time for me to work with "
+        elif not isFutureTime(validtime):
+            print("Invalid time. it is in the past", validtime, time)
+            message += "Uh oh, I can't work with a past time "
     if numberofpeople:
         if not numberofpeople.isdigit() or int(numberofpeople)< 1:
             print("Invalid numberofpeople", numberofpeople)
